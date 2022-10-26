@@ -17,7 +17,7 @@
 #define PS_TOUCHPAD_MAX_X 1920
 #define PS_TOUCHPAD_MAX_Y 1079
 
-StreamSessionConnectInfo::StreamSessionConnectInfo(Settings *settings, ChiakiTarget target, QString host, QByteArray regist_key, QByteArray morning, QString initial_login_pin, bool fullscreen, bool zoom, bool stretch)
+StreamSessionConnectInfo::StreamSessionConnectInfo(Settings *settings, ChiakiTarget target, QString host, QByteArray regist_key, QByteArray morning, QString initial_login_pin, bool fullscreen, bool zoom, bool stretch, bool enable_dualsense)
 	: settings(settings)
 {
 	key_map = settings->GetControllerMappingForDecoding();
@@ -37,6 +37,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(Settings *settings, ChiakiTar
 	this->zoom = zoom;
 	this->stretch = stretch;
 	this->enable_keyboard = false; // TODO: from settings
+	this->enable_dualsense = enable_dualsense;
 }
 
 static void AudioSettingsCb(uint32_t channels, uint32_t rate, void *user);
@@ -114,6 +115,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	chiaki_connect_info.video_profile = connect_info.video_profile;
 	chiaki_connect_info.video_profile_auto_downgrade = true;
 	chiaki_connect_info.enable_keyboard = false;
+	chiaki_connect_info.enable_dualsense = connect_info.enable_dualsense;
 
 #if CHIAKI_LIB_ENABLE_PI_DECODER
 	if(connect_info.decoder == Decoder::Pi && chiaki_connect_info.video_profile.codec != CHIAKI_CODEC_H264)
@@ -506,6 +508,19 @@ void StreamSession::Event(ChiakiEvent *event)
 			QMetaObject::invokeMethod(this, [this, left, right]() {
 				for(auto controller : controllers)
 					controller->SetRumble(left, right);
+			});
+			break;
+		}
+		case CHIAKI_EVENT_TRIGGER_EFFECTS: {
+			uint8_t type_left = event->trigger_effects.type_left;
+			uint8_t data_left[10];
+			memcpy(data_left, event->trigger_effects.left, 10);
+			uint8_t data_right[10];
+			memcpy(data_right, event->trigger_effects.right, 10);
+			uint8_t type_right = event->trigger_effects.type_right;
+			QMetaObject::invokeMethod(this, [this, type_left, data_left, type_right, data_right]() {
+				for(auto controller : controllers)
+					controller->SetTriggerEffects(type_left, data_left, type_right, data_right);
 			});
 			break;
 		}

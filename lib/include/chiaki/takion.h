@@ -27,7 +27,8 @@ extern "C" {
 typedef enum chiaki_takion_message_data_type_t {
 	CHIAKI_TAKION_MESSAGE_DATA_TYPE_PROTOBUF = 0,
 	CHIAKI_TAKION_MESSAGE_DATA_TYPE_RUMBLE = 7,
-	CHIAKI_TAKION_MESSAGE_DATA_TYPE_9 = 9
+	CHIAKI_TAKION_MESSAGE_DATA_TYPE_9 = 9,
+	CHIAKI_TAKION_MESSAGE_DATA_TYPE_TRIGGEREFFECTS = 11,
 } ChiakiTakionMessageDataType;
 
 typedef struct chiaki_takion_av_packet_t
@@ -106,6 +107,7 @@ typedef struct chiaki_takion_connect_info_t
 	ChiakiTakionCallback cb;
 	void *cb_user;
 	bool enable_crypt;
+	bool enable_dualsense;
 	uint8_t protocol_version;
 } ChiakiTakionConnectInfo;
 
@@ -162,6 +164,8 @@ typedef struct chiaki_takion_t
 	ChiakiTakionAVPacketParse av_packet_parse;
 
 	ChiakiKeyState key_state;
+
+	bool enable_dualsense;
 } ChiakiTakion;
 
 

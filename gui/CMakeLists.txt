@@ -7,7 +7,7 @@ if(APPLE)
 	find_package(Qt5 REQUIRED COMPONENTS MacExtras)
 endif()
 if(CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER)
-	find_package(SDL2 MODULE REQUIRED)
+	find_package(SDL2 2.0.16 MODULE REQUIRED)
 endif()
 
 if(WIN32)

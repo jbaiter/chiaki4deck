@@ -108,6 +108,9 @@ int real_main(int argc, char *argv[])
 	QCommandLineOption stretch_option("stretch", "Start window in fullscreen stretched to fit screen [distorts aspect ratio to fill screen] (only for use with stream command).");
 	parser.addOption(stretch_option);
 
+	QCommandLineOption dualsense_option("dualsense", "Enable DualSense haptics and adaptive triggers (PS5 and DualSense connected via USB only).");
+	parser.addOption(dualsense_option);
+
 	QCommandLineOption passcode_option("passcode", "Automatically send your PlayStation login passcode (only affects users with a login passcode set on their PlayStation console).", "passcode");
 	parser.addOption(passcode_option);
 
@@ -200,7 +203,7 @@ int real_main(int argc, char *argv[])
 			}
 		}
 
-		StreamSessionConnectInfo connect_info(&settings, target, host, regist_key, morning, initial_login_passcode, parser.isSet(fullscreen_option), parser.isSet(zoom_option), parser.isSet(stretch_option));
+		StreamSessionConnectInfo connect_info(&settings, target, host, regist_key, morning, initial_login_passcode, parser.isSet(fullscreen_option), parser.isSet(zoom_option), parser.isSet(stretch_option), parser.isSet(dualsense_option));
 
 		return RunStream(app, connect_info);
 	}
