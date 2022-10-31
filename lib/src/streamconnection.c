@@ -81,6 +81,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_stream_connection_init(ChiakiStreamConnecti
 
 	stream_connection->video_receiver = NULL;
 	stream_connection->audio_receiver = NULL;
+	stream_connection->haptics_receiver = NULL;
 
 	err = chiaki_mutex_init(&stream_connection->feedback_sender_mutex, false);
 	if(err != CHIAKI_ERR_SUCCESS)
@@ -167,12 +168,20 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_stream_connection_run(ChiakiStreamConnectio
 		return CHIAKI_ERR_UNKNOWN;
 	}
 
+	stream_connection->haptics_receiver = chiaki_audio_receiver_new(session, NULL);
+	if(!stream_connection->haptics_receiver)
+	{
+		CHIAKI_LOGE(session->log, "StreamConnection failed to initialize Haptics Receiver");
+		err = CHIAKI_ERR_UNKNOWN;
+		goto err_audio_receiver;
+	}
+
 	stream_connection->video_receiver = chiaki_video_receiver_new(session, &stream_connection->packet_stats);
 	if(!stream_connection->video_receiver)
 	{
 		CHIAKI_LOGE(session->log, "StreamConnection failed to initialize Video Receiver");
 		err = CHIAKI_ERR_UNKNOWN;
-		goto err_audio_receiver;
+		goto err_haptics_receiver;
 	}
 
 	stream_connection->state = STATE_TAKION_CONNECT;
@@ -323,6 +332,10 @@ close_takion:
 err_video_receiver:
 	chiaki_video_receiver_free(stream_connection->video_receiver);
 	stream_connection->video_receiver = NULL;
+
+err_haptics_receiver:
+	chiaki_audio_receiver_free(stream_connection->haptics_receiver);
+	stream_connection->haptics_receiver = NULL;
 
 err_audio_receiver:
 	chiaki_audio_receiver_free(stream_connection->audio_receiver);
@@ -483,7 +496,7 @@ static void stream_connection_takion_data_idle(ChiakiStreamConnection *stream_co
 		return;
 	}
 
-	CHIAKI_LOGV(stream_connection->log, "StreamConnection received data");
+	CHIAKI_LOGV(stream_connection->log, "StreamConnection received data with msg.type == %d", msg.type);
 	chiaki_log_hexdump(stream_connection->log, CHIAKI_LOG_VERBOSE, buf, buf_size);
 
 	if(msg.type == tkproto_TakionMessage_PayloadType_DISCONNECT)
@@ -545,7 +558,8 @@ static void stream_connection_takion_data_expect_bang(ChiakiStreamConnection *st
 			return;
 		}
 
-		CHIAKI_LOGE(stream_connection->log, "StreamConnection expected bang payload but received something else");
+		CHIAKI_LOGE(stream_connection->log, "StreamConnection expected bang payload but received something else: %d", msg.type);
+		chiaki_log_hexdump(stream_connection->log, CHIAKI_LOG_VERBOSE, buf, buf_size);
 		return;
 	}
 
@@ -926,9 +940,15 @@ static void stream_connection_takion_av(ChiakiStreamConnection *stream_connectio
 	chiaki_gkcrypt_decrypt(stream_connection->gkcrypt_remote, packet->key_pos + CHIAKI_GKCRYPT_BLOCK_SIZE, packet->data, packet->data_size);
 
 	if(packet->is_video)
+	{
 		chiaki_video_receiver_av_packet(stream_connection->video_receiver, packet);
-	else
+	} else if(packet->is_haptics)
+	{
+	    chiaki_audio_receiver_av_packet(stream_connection->haptics_receiver, packet);
+	} else
+	{
 		chiaki_audio_receiver_av_packet(stream_connection->audio_receiver, packet);
+	}
 }
 
 static ChiakiErrorCode stream_connection_send_heartbeat(ChiakiStreamConnection *stream_connection)

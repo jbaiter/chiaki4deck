@@ -1311,7 +1311,7 @@ static ChiakiErrorCode av_packet_parse(bool v12, ChiakiTakionAVPacket *packet, C
 
 	if(v12 && !packet->is_video)
 	{
-		packet->byte_before_audio_data = *av;
+		packet->is_haptics = *av == 0x02;
 		av += 1;
 		av_size -= 1;
 	}

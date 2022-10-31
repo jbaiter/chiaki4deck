@@ -203,6 +203,7 @@ typedef struct chiaki_session_t
 	ChiakiVideoSampleCallback video_sample_cb;
 	void *video_sample_cb_user;
 	ChiakiAudioSink audio_sink;
+	ChiakiAudioSink haptics_sink;
 
 	ChiakiThread session_thread;
 
@@ -256,6 +257,14 @@ static inline void chiaki_session_set_video_sample_cb(ChiakiSession *session, Ch
 static inline void chiaki_session_set_audio_sink(ChiakiSession *session, ChiakiAudioSink *sink)
 {
 	session->audio_sink = *sink;
+}
+
+/**
+ * @param sink contents are copied
+ */
+static inline void chiaki_session_set_haptics_sink(ChiakiSession *session, ChiakiAudioSink *sink)
+{
+	session->haptics_sink = *sink;
 }
 
 #ifdef __cplusplus

@@ -37,6 +37,7 @@ typedef struct chiaki_takion_av_packet_t
 	ChiakiSeqNum16 frame_index;
 	bool uses_nalu_info_structs;
 	bool is_video;
+	bool is_haptics;
 	ChiakiSeqNum16 unit_index;
 	uint16_t units_in_frame_total; // source + units_in_frame_fec
 	uint16_t units_in_frame_fec;
@@ -46,8 +47,6 @@ typedef struct chiaki_takion_av_packet_t
 	uint8_t byte_at_0x2c;
 
 	uint64_t key_pos;
-
-	uint8_t byte_before_audio_data;
 
 	uint8_t *data; // not owned
 	size_t data_size;
