@@ -99,8 +99,7 @@ class StreamSession : public QObject
 		unsigned int audio_buffer_size;
 		QAudioOutput *audio_output;
 		QIODevice *audio_io;
-		QAudioOutput *haptics_output;
-		QIODevice *haptics_io;
+		SDL_AudioDeviceID haptics_output;
 		uint8_t *haptics_resampler_buf;
 
 		QMap<Qt::Key, int> key_map;

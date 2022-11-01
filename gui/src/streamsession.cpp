@@ -58,8 +58,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 #endif
 	audio_output(nullptr),
 	audio_io(nullptr),
-	haptics_output(nullptr),
-	haptics_io(nullptr),
+	haptics_output(0),
 	haptics_resampler_buf(nullptr)
 {
 	connected = false;
@@ -226,7 +225,13 @@ StreamSession::~StreamSession()
 		chiaki_ffmpeg_decoder_fini(ffmpeg_decoder);
 		delete ffmpeg_decoder;
 	}
-	if (haptics_resampler_buf) {
+	if (haptics_output > 0)
+	{
+		SDL_CloseAudioDevice(haptics_output);
+		haptics_output = 0;
+	}
+	if (haptics_resampler_buf)
+	{
 		free(haptics_resampler_buf);
 		haptics_resampler_buf = nullptr;
 	}
@@ -501,47 +506,57 @@ void StreamSession::InitAudio(unsigned int channels, unsigned int rate)
 
 void StreamSession::InitHaptics()
 {
-	delete haptics_output;
-	haptics_output = nullptr;
-	haptics_io = nullptr;
+	haptics_output = 0;
 	haptics_resampler_buf = nullptr;
+	// Haptics work most reliably with Pipewire, so try to use that if available
+	SDL_SetHint("SDL_AUDIODRIVER", "pipewire");
 
-	QAudioFormat haptics_format;
-	haptics_format.setSampleRate(48000);
-	haptics_format.setChannelCount(4);
-	haptics_format.setSampleSize(16);
-	haptics_format.setCodec("audio/pcm");
-	haptics_format.setSampleType(QAudioFormat::SignedInt);
-	haptics_format.setByteOrder(QAudioFormat::LittleEndian);
-
-	bool found_dualsense = false;
-	QAudioDeviceInfo haptics_out_device_info;
-	for(QAudioDeviceInfo di : QAudioDeviceInfo::availableDevices(QAudio::AudioOutput))
+	if (SDL_Init(SDL_INIT_AUDIO) < 0)
 	{
-		if (di.deviceName().startsWith("alsa_output.usb-Sony_Interactive_Entertainment_Wireless_Controller") && di.isFormatSupported(haptics_format))
-		{
-			haptics_out_device_info = di;
-			found_dualsense = true;
-			break;
-		}
+		CHIAKI_LOGE(log.GetChiakiLog(), "Could not initialize SDL Audio for haptics output: %s", SDL_GetError());
+		return;
 	}
-	if(!found_dualsense)
+
+	if (!strstr(SDL_GetCurrentAudioDriver(), "pipewire")) {
+		CHIAKI_LOGW(
+			log.GetChiakiLog(),
+			"Haptics output is not using Pipewire, this may not work reliably. (was: '%s')",
+			SDL_GetCurrentAudioDriver());
+	}
+
+	SDL_AudioSpec want, have;
+	SDL_zero(want);
+	want.freq = 48000;
+	want.format = AUDIO_S16LSB;
+	want.channels = 4;
+	want.samples = 480; // 10ms buffer
+	want.callback = NULL;
+
+	const char *device_name = nullptr;
+	for (int i=0; i < SDL_GetNumAudioDevices(0); i++) {
+		device_name = SDL_GetAudioDeviceName(i, 0);
+		if (!device_name || !strstr(device_name, "DualSense")) {
+			continue;
+		}
+		haptics_output = SDL_OpenAudioDevice(device_name, 0, &want, &have, 0);
+		if (haptics_output == 0) {
+			CHIAKI_LOGE(log.GetChiakiLog(), "Could not open SDL Audio Device %s for haptics output: %s", device_name, SDL_GetError());
+			continue;
+		}
+		SDL_PauseAudioDevice(haptics_output, 0);
+		break;
+	}
+	if(!haptics_output)
 	{
 		CHIAKI_LOGW(log.GetChiakiLog(), "DualSense features were enabled, but could not find the DualSense audio device!");
 		return;
 	}
-
-	haptics_output = new QAudioOutput(haptics_out_device_info, haptics_format, this);
-	haptics_output->setBufferSize(480);
-	haptics_io = haptics_output->start();
 	SDL_AudioCVT cvt;
 	SDL_BuildAudioCVT(&cvt, AUDIO_S16LSB, 4, 3000, AUDIO_S16LSB, 4, 48000);
 	cvt.len = 240;  // 10 16bit stereo samples
 	haptics_resampler_buf = (uint8_t*) calloc(cvt.len * cvt.len_mult, sizeof(uint8_t));
 
-	CHIAKI_LOGI(log.GetChiakiLog(), "Haptics Audio Device %s opened with 4 channels @ 3000 Hz, buffer size %u",
-				haptics_out_device_info.deviceName().toLocal8Bit().constData(),
-				haptics_output->bufferSize());
+	CHIAKI_LOGI(log.GetChiakiLog(), "Haptics Audio Device '%s' opened with %d channels @ %d Hz, buffer size %u (driver=%s)", device_name, have.channels, have.freq, have.size, SDL_GetCurrentAudioDriver());
 }
 
 void StreamSession::PushAudioFrame(int16_t *buf, size_t samples_count)
@@ -553,7 +568,7 @@ void StreamSession::PushAudioFrame(int16_t *buf, size_t samples_count)
 
 void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 {
-	if(!haptics_io)
+	if(haptics_output == 0)
 		return;
 	SDL_AudioCVT cvt;
 	// Haptics samples are coming in at 3KHZ, but the DualSense expects 48KHZ
@@ -570,7 +585,11 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		CHIAKI_LOGE(log.GetChiakiLog(), "Failed to resample haptics audio: %s", SDL_GetError());
 		return;
 	}
-	haptics_io->write((const char *)haptics_resampler_buf, static_cast<qint64>(cvt.len_cvt));
+
+	if (SDL_QueueAudio(haptics_output, cvt.buf, cvt.len_cvt) < 0) {
+		CHIAKI_LOGE(log.GetChiakiLog(), "Failed to submit haptics audio to device: %s", SDL_GetError());
+		return;
+	}
 }
 
 void StreamSession::Event(ChiakiEvent *event)
