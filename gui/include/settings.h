@@ -44,7 +44,8 @@ enum class Decoder
 enum class PlaceboPreset {
 	Fast,
 	Default,
-	HighQuality
+	HighQuality,
+	Custom
 };
 
 enum class WindowType {
